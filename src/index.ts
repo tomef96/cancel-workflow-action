@@ -56,18 +56,27 @@ async function main() {
         branch
       });
       console.log(`Found ${data.total_count} runs total.`);
+
       const runningWorkflows = data.workflow_runs.filter(
-        workflow => workflow.head_branch === branch && workflow.head_sha !== headSha && workflow.status !== 'completed'
-      );
-      console.log(`Found ${runningWorkflows.length} runs in progress.`);
-      for (const {id, head_sha, status} of runningWorkflows) {
-        console.log('Cancelling another run: ', {id, head_sha, status});
-        const res = await octokit.actions.cancelWorkflowRun({
-          owner,
-          repo,
-          run_id: id
-        });
-        console.log(`Cancel run ${id} responded with status ${res.status}`);
+        workflow => workflow.head_branch === branch && workflow.status !== 'completed'
+      ).sort((a, b) => b.run_number - a.run_number)
+      console.log(`Found ${runningWorkflows.length} runs in progress, including this run.`);
+
+      if (runningWorkflows[0].head_sha === headSha) {
+        runningWorkflows.splice(0, 1)
+        for (const {id, head_sha, status} of runningWorkflows) {
+          console.log('Cancelling another run: ', {id, head_sha, status});
+          const res = await octokit.actions.cancelWorkflowRun({
+            owner,
+            repo,
+            run_id: id
+          });
+          console.log(`Cancel run ${id} responded with status ${res.status}`);
+        }
+      } else {
+        console.log(
+          "This is not the latest workflow, it will be canceled by another workflow"
+        );
       }
     } catch (e) {
       const msg = e.message || e;

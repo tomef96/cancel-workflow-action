@@ -925,69 +925,6 @@ module.exports = require("https");
 
 /***/ }),
 
-/***/ 257:
-/***/ (function(__unusedmodule, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, '__esModule', { value: true });
-
-function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
-
-var deprecation = __webpack_require__(692);
-var once = _interopDefault(__webpack_require__(969));
-
-const logOnce = once(deprecation => console.warn(deprecation));
-/**
- * Error with extra properties to help with debugging
- */
-
-class RequestError extends Error {
-  constructor(message, statusCode, options) {
-    super(message); // Maintains proper stack trace (only available on V8)
-
-    /* istanbul ignore next */
-
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, this.constructor);
-    }
-
-    this.name = "HttpError";
-    this.status = statusCode;
-    Object.defineProperty(this, "code", {
-      get() {
-        logOnce(new deprecation.Deprecation("[@octokit/request-error] `error.code` is deprecated, use `error.status`."));
-        return statusCode;
-      }
-
-    });
-    this.headers = options.headers || {}; // redact request credentials without mutating original request options
-
-    const requestCopy = Object.assign({}, options.request);
-
-    if (options.request.headers.authorization) {
-      requestCopy.headers = Object.assign({}, options.request.headers, {
-        authorization: options.request.headers.authorization.replace(/ .*$/, " [REDACTED]")
-      });
-    }
-
-    requestCopy.url = requestCopy.url // client_id & client_secret can be passed as URL query parameters to increase rate limit
-    // see https://developer.github.com/v3/#increasing-the-unauthenticated-rate-limit-for-oauth-applications
-    .replace(/\bclient_secret=\w+/g, "client_secret=[REDACTED]") // OAuth tokens can be passed as URL query parameters, although it is not recommended
-    // see https://developer.github.com/v3/#oauth2-token-sent-in-a-header
-    .replace(/\baccess_token=\w+/g, "access_token=[REDACTED]");
-    this.request = requestCopy;
-  }
-
-}
-
-exports.RequestError = RequestError;
-//# sourceMappingURL=index.js.map
-
-
-/***/ }),
-
 /***/ 260:
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -2944,16 +2881,22 @@ async function main() {
                 branch
             });
             console.log(`Found ${data.total_count} runs total.`);
-            const runningWorkflows = data.workflow_runs.filter(workflow => workflow.head_branch === branch && workflow.head_sha !== headSha && workflow.status !== 'completed');
-            console.log(`Found ${runningWorkflows.length} runs in progress.`);
-            for (const { id, head_sha, status } of runningWorkflows) {
-                console.log('Cancelling another run: ', { id, head_sha, status });
-                const res = await octokit.actions.cancelWorkflowRun({
-                    owner,
-                    repo,
-                    run_id: id
-                });
-                console.log(`Cancel run ${id} responded with status ${res.status}`);
+            const runningWorkflows = data.workflow_runs.filter(workflow => workflow.head_branch === branch && workflow.status !== 'completed').sort((a, b) => b.run_number - a.run_number);
+            console.log(`Found ${runningWorkflows.length} runs in progress, including this run.`);
+            if (runningWorkflows[0].head_sha === headSha) {
+                runningWorkflows.splice(0, 1);
+                for (const { id, head_sha, status } of runningWorkflows) {
+                    console.log('Cancelling another run: ', { id, head_sha, status });
+                    const res = await octokit.actions.cancelWorkflowRun({
+                        owner,
+                        repo,
+                        run_id: id
+                    });
+                    console.log(`Cancel run ${id} responded with status ${res.status}`);
+                }
+            }
+            else {
+                console.log("This is not the latest workflow, it will be canceled by another workflow");
             }
         }
         catch (e) {
@@ -7303,7 +7246,7 @@ var endpoint = __webpack_require__(385);
 var universalUserAgent = __webpack_require__(796);
 var isPlainObject = _interopDefault(__webpack_require__(696));
 var nodeFetch = _interopDefault(__webpack_require__(454));
-var requestError = __webpack_require__(257);
+var requestError = __webpack_require__(463);
 
 const VERSION = "5.4.4";
 
